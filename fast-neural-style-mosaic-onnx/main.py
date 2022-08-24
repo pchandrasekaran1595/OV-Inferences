@@ -38,6 +38,13 @@ def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
     return np.expand_dims(image, axis=0)
 
 
+def rgb_2_bgr(image: np.ndarray) -> np.ndarray:
+    return np.concatenate((
+        np.expand_dims(image[:, :, 2], axis=2), 
+        np.expand_dims(image[:, :, 1], axis=2), 
+        np.expand_dims(image[:, :, 0], axis=2)), axis=2)
+
+
 def show_image(
     image: np.ndarray, 
     cmap: Optional[str]="gnuplot2", 
@@ -124,7 +131,7 @@ def main():
                 frame = preprocess(frame, W, H)
                 frame = infer(model, output_layer, frame, w, h, args.negative)
 
-                cv2.imshow("Feed", frame)
+                cv2.imshow("Feed", rgb_2_bgr(frame))
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
@@ -150,7 +157,7 @@ def main():
             frame = preprocess(frame, W, H)
             frame = infer(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, args.negative)
 
-            cv2.imshow("Feed", frame)
+            cv2.imshow("Feed", rgb_2_bgr(frame))
         
             if cv2.waitKey(1) & 0xFF == ord('q'): 
                 break
