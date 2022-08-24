@@ -9,7 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from typing import Optional
-from dotenv import load_dotenv
 from openvino.runtime import Core
 
 
@@ -64,8 +63,6 @@ def setup(target: str) -> tuple:
     
 
 def main():
-
-    load_dotenv()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
