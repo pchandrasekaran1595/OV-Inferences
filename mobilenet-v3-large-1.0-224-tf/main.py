@@ -72,6 +72,7 @@ def main():
     args = parser.parse_args()
 
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
+    assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
     model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
 
