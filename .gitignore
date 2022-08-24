@@ -1,0 +1,11 @@
+__pycache__
+*.jpg
+*.png
+*.tiff
+!Test_1.jpg
+!Test_2.jpg
+*.mp4
+*.avi
+.env
+cmdhere-venv.bat
+venv
