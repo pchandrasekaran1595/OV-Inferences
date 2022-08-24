@@ -7,5 +7,4 @@ __pycache__
 *.mp4
 *.avi
 .env
-cmdhere-venv.bat
 venv

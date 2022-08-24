@@ -1,0 +1,1 @@
+start /MAX cmd /k "cls && title CMD-VENV && cd /d %BUILD_DISK%/Virtual Environments/OpenVINO/Scripts && activate && cd %BUILD_DISK%/Repos/OV-Inferences"
