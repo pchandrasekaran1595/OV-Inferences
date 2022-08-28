@@ -70,7 +70,7 @@ def infer_best_box(
     h: int) -> tuple:
 
     result = model(inputs=[image])[output_layer].squeeze()
-
+    
     label = int(result[0][1])
     probs = result[0][2]
     x1 = int(result[0][3] * w)
