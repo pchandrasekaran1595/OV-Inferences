@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import cv2
-import json
 import platform
 import argparse
 import numpy as np
