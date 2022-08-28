@@ -10,3 +10,4 @@ __pycache__
 venv
 facial-landmarks-98-detection-0001
 yolox-tiny
+detr-resnet50
