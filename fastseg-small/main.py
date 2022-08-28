@@ -119,7 +119,7 @@ def main():
                 frame = preprocess(frame, W, H)
                 frame = np.argmax(model(inputs=[frame])[output_layer].squeeze(), axis=0)
                 # labels = np.unique(result)
-                frame = cv2.resize(src=segmenter_decode(frame), dsize=(CAM_WIDTH, CAM_HEIGHT), interpolation=cv2.INTER_AREA)
+                frame = cv2.resize(src=segmenter_decode(frame), dsize=(w, h), interpolation=cv2.INTER_AREA)
                 
                 cv2.imshow("Feed", frame)
             else:

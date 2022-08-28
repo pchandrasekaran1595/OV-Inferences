@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import cv2
+import json
 import platform
 import argparse
 import numpy as np
@@ -23,25 +24,32 @@ CAM_WIDTH: int  = 640
 CAM_HEIGHT: int = 360 
 FPS: int = 30
 
-MEAN_VAL_R: float = 123.68
-MEAN_VAL_G: float = 116.779
-MEAN_VAL_B: float = 103.939
-
 
 def breaker(num: int=50, char: str="*") -> None:
     print("\n" + num*char + "\n")
 
 
 def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
-    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
+    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA)
     return np.expand_dims(image, axis=0)
 
 
-def rgb_2_bgr(image: np.ndarray) -> np.ndarray:
-    return np.concatenate((
-        np.expand_dims(image[:, :, 2], axis=2), 
-        np.expand_dims(image[:, :, 1], axis=2), 
-        np.expand_dims(image[:, :, 0], axis=2)), axis=2)
+def segmenter_decode(class_index_image: np.ndarray) -> np.ndarray:
+    colors = np.array([(0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0), (0, 0, 128), (128, 0, 128),
+                       (0, 128, 128), (128, 128, 128), (64, 0, 0), (192, 0, 0), (64, 128, 0),
+                       (192, 128, 0), (64, 0, 128), (192, 0, 128), (64, 128, 128), (192, 128, 128),
+                       (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
+
+    r, g, b = np.zeros(class_index_image.shape, dtype=np.uint8), \
+              np.zeros(class_index_image.shape, dtype=np.uint8), \
+              np.zeros(class_index_image.shape, dtype=np.uint8)
+
+    for i in range(20):
+        indexes = (class_index_image == i)
+        r[indexes] = colors[i][0]
+        g[indexes] = colors[i][1]
+        b[indexes] = colors[i][2]
+    return np.stack([r, g, b], axis=2)
 
 
 def show_image(
@@ -51,7 +59,7 @@ def show_image(
     ) -> None:
 
     plt.figure()
-    plt.imshow(image, cmap=cmap)
+    plt.imshow(cv2.cvtColor(src=image, code=cv2.COLOR_BGR2RGB), cmap=cmap)
     if title: plt.title(title)
     figmanager = plt.get_current_fig_manager()
     figmanager.window.state("zoomed")
@@ -66,7 +74,9 @@ def setup(target: str) -> tuple:
     input_layer = next(iter(model.inputs))
     output_layer = next(iter(model.outputs))
 
-    return model, input_layer, output_layer, \
+    labels = json.load(open(os.path.join(LABEL_PATH, "seg_labels_20.json"), "r"))
+
+    return model, labels, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
 
 
@@ -76,19 +86,19 @@ def infer(
     image: np.ndarray, 
     w: int, 
     h: int,
-    negative: bool
-) -> np.ndarray:
+    labels: list
+) -> tuple:
 
-    result = model(inputs=[image])[output_layer].squeeze().transpose(1, 2, 0)
-    result = result[::] + (MEAN_VAL_R, MEAN_VAL_G, MEAN_VAL_B)
-    result = cv2.resize(src=result, dsize=(w, h), interpolation=cv2.INTER_CUBIC)
+    result = model(inputs=[image])[output_layer].squeeze()
+    label_indexes = np.unique(result)
 
-    result[result < 0] = 0
-    result[result > 255] = 255
+    label_list: list = []
+    for index in label_indexes: 
+        if index != 0:
+            label_list.append(labels[str(index)].title())
+    result = cv2.resize(src=segmenter_decode(result), dsize=(w, h), interpolation=cv2.INTER_CUBIC)
 
-    if negative: result = 255 - result
-
-    return result / 255
+    return result, label_list
     
 
 def main():
@@ -98,22 +108,22 @@ def main():
     parser.add_argument("--filename", "-f", type=str, default="Test_1.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
-    parser.add_argument("--negative", "-n", action="store_true", help="Negate the result")
     args = parser.parse_args()
 
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
+    model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         h, w, _ = image.shape
         image = preprocess(image, W, H)
-        inferred_image = infer(model, output_layer, image, w, h, args.negative)
-
-        show_image(inferred_image)
-
+        
+        result, label_list = infer(model, output_layer, image, w, h, labels)
+        
+        show_image(result, title=label_list)        
+    
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
         cap = cv2.VideoCapture(os.path.join(INPUT_PATH, args.filename))
 
@@ -126,12 +136,10 @@ def main():
                         dsize=(int(frame.shape[1]/args.downscale), int(frame.shape[0]/args.downscale)), 
                         interpolation=cv2.INTER_AREA
                     )
-                
                 h, w, _ = frame.shape
                 frame = preprocess(frame, W, H)
-                frame = infer(model, output_layer, frame, w, h, args.negative)
-
-                cv2.imshow("Feed", rgb_2_bgr(frame))
+                frame, _ = infer(model, output_layer, frame, w, h, labels)
+                cv2.imshow("Feed", frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
@@ -155,10 +163,10 @@ def main():
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            frame = infer(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, args.negative)
+            frame, _ = infer(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, labels)
+            
+            cv2.imshow("Feed", frame)
 
-            cv2.imshow("Feed", rgb_2_bgr(frame))
-        
             if cv2.waitKey(1) & 0xFF == ord('q'): 
                 break
         
