@@ -2,8 +2,10 @@ __pycache__
 *.jpg
 *.png
 *.tiff
+*.jfif
 !Test_1.jpg
 !Test_2.jpg
+!Test_3.jfif
 *.mp4
 *.avi
 .env
