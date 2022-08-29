@@ -29,12 +29,8 @@ def breaker(num: int=50, char: str="*") -> None:
     print("\n" + num*char + "\n")
 
 
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
-
-
 def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
-    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
+    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA)
     return np.expand_dims(image, axis=0)
 
 
@@ -60,7 +56,9 @@ def setup(target: str) -> tuple:
     input_layer = next(iter(model.inputs))
     output_layer = next(iter(model.outputs))
 
-    return model, input_layer, output_layer, \
+    labels = json.load(open(os.path.join(LABEL_PATH, "imagenet_labels.json"), "r"))
+
+    return model, labels, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
     
 
@@ -76,15 +74,17 @@ def main():
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
+    model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
-        h, w, _ = image.shape
         image = preprocess(image, W, H)
 
-        result = sigmoid(cv2.resize(src=model(inputs=[image])[output_layer].squeeze(), dsize=(w, h), interpolation=cv2.INTER_AREA))
-        show_image(result)        
+        result_label = labels[str(np.argmax(model(inputs=[image])[output_layer]) - 1)].split(",")[0].title()
+
+        breaker()
+        print(f"Label : {result_label}")
+        breaker()
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
         cap = cv2.VideoCapture(os.path.join(INPUT_PATH, args.filename))
@@ -98,10 +98,20 @@ def main():
                         dsize=(int(frame.shape[1]/args.downscale), int(frame.shape[0]/args.downscale)), 
                         interpolation=cv2.INTER_AREA
                     )
+                disp_frame = frame.copy()
                 frame = preprocess(frame, W, H)
-                frame = sigmoid(cv2.resize(src=model(inputs=[frame])[output_layer].squeeze(), dsize=(w, h), interpolation=cv2.INTER_AREA))
-               
-                cv2.imshow("Feed", frame)
+                result_label = labels[str(np.argmax(model(inputs=[frame])[output_layer]) - 1)].split(",")[0].title()
+
+                cv2.putText(
+                    img=disp_frame, 
+                    text=result_label, 
+                    org=(25, 75), 
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                    fontScale=1, 
+                    color=(0, 255, 0), 
+                    thickness=2
+                )
+                cv2.imshow("Feed", disp_frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
@@ -122,12 +132,23 @@ def main():
 
         while True:
             ret, frame = cap.read()
+            disp_frame = frame.copy()
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            frame = sigmoid(cv2.resize(src=model(inputs=[frame])[output_layer].squeeze(), dsize=(CAM_WIDTH, CAM_HEIGHT), interpolation=cv2.INTER_AREA))
+            result_label = labels[str(np.argmax(model(inputs=[frame])[output_layer]) - 1)].split(",")[0].title()
 
-            cv2.imshow("Feed", frame)
+            cv2.putText(
+                img=disp_frame, 
+                text=result_label, 
+                org=(25, 75), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=1, 
+                color=(0, 255, 0), 
+                thickness=2
+            )
+            cv2.imshow("Feed", disp_frame)
+        
             if cv2.waitKey(1) & 0xFF == ord('q'): 
                 break
         

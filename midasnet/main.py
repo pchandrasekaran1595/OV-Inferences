@@ -1,3 +1,4 @@
+from cmath import inf
 import os
 import re
 import sys
@@ -62,15 +63,37 @@ def setup(target: str) -> tuple:
 
     return model, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
+
+
+def infer(
+    model, 
+    output_layer, 
+    image: np.ndarray, 
+    w: int, 
+    h: int,
+    negative: bool
+) -> np.ndarray:
+
+    result = model(inputs=[image])[output_layer].squeeze()
+    result = (result / np.max(result))
+    result = cv2.resize(src=result, dsize=(w, h), interpolation=cv2.INTER_CUBIC)
+
+    result[result < 0] = 0
+    result[result > 1] = 1
+
+    if negative: result = 1 - result
+
+    return result
     
 
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
+    parser.add_argument("--mode", "-m", type=str, default="realtime", help="Mode: image or video or realtime")
     parser.add_argument("--filename", "-f", type=str, default="Test_1.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
+    parser.add_argument("--negative", "-n", action="store_true", help="Negate the result")
     args = parser.parse_args()
 
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
@@ -82,8 +105,8 @@ def main():
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         h, w, _ = image.shape
         image = preprocess(image, W, H)
-
-        result = sigmoid(cv2.resize(src=model(inputs=[image])[output_layer].squeeze(), dsize=(w, h), interpolation=cv2.INTER_AREA))
+        
+        result = infer(model, output_layer, image, w, h, args.negative)
         show_image(result)        
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
@@ -99,7 +122,7 @@ def main():
                         interpolation=cv2.INTER_AREA
                     )
                 frame = preprocess(frame, W, H)
-                frame = sigmoid(cv2.resize(src=model(inputs=[frame])[output_layer].squeeze(), dsize=(w, h), interpolation=cv2.INTER_AREA))
+                frame = infer(model, output_layer, frame, w, h, args.negative)
                
                 cv2.imshow("Feed", frame)
             else:
@@ -125,7 +148,7 @@ def main():
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            frame = sigmoid(cv2.resize(src=model(inputs=[frame])[output_layer].squeeze(), dsize=(CAM_WIDTH, CAM_HEIGHT), interpolation=cv2.INTER_AREA))
+            frame = infer(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, args.negative)
 
             cv2.imshow("Feed", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'): 
