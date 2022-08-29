@@ -30,7 +30,7 @@ def breaker(num: int=50, char: str="*") -> None:
 
 
 def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
-    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA)
+    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
     return np.expand_dims(image, axis=0)
 
 
@@ -56,13 +56,11 @@ def setup(target: str) -> tuple:
     input_layer = next(iter(model.inputs))
     output_layer = next(iter(model.outputs))
 
-    labels = json.load(open(os.path.join(LABEL_PATH, "coco_labels_91.json"), "r"))
-
-    return model, labels, input_layer, output_layer, \
+    return model, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
 
 
-def infer_best_box(
+def infer_boxes(
     model, 
     output_layer, 
     image: np.ndarray, 
@@ -70,22 +68,33 @@ def infer_best_box(
     h: int) -> tuple:
 
     result = model(inputs=[image])[output_layer].squeeze()
-    
-    label = int(result[0][1])
-    probs = result[0][2]
-    x1 = int(result[0][3] * w)
-    y1 = int(result[0][4] * h)
-    x2 = int(result[0][5] * w)
-    y2 = int(result[0][6] * h)
 
-    return label, probs, (x1, y1), (x2, y2)
+    label_indexes: list = []
+    probs: list = []
+    boxes: list = []
+
+    if result[0][0] == -1:
+        return 0, None, None    
+    else:
+        for i in range(result.shape[0]):
+            if result[i][0] == -1:
+                break
+            else:
+                label_indexes.append(int(result[i][1]))
+                probs.append(result[i][2])
+                boxes.append([int(result[i][3] * w), \
+                              int(result[i][4] * h), \
+                              int(result[i][5] * w), \
+                              int(result[i][6] * h)])
+        
+    return label_indexes, probs, boxes
 
 
 def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
-    parser.add_argument("--filename", "-f", type=str, default="Test_1.jpg", help="Image or Video Filename")
+    parser.add_argument("--filename", "-f", type=str, default="Test_3.jfif", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
     args = parser.parse_args()
@@ -93,7 +102,7 @@ def main():
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
+    model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
@@ -101,9 +110,13 @@ def main():
         disp_image = image.copy()
         image = preprocess(image, W, H)
 
-        label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, image, w, h)
-        cv2.rectangle(disp_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        show_image(disp_image, title=f"{labels[str(label_index)].title()} ({probs:.2f})")
+        label_indexes, probs, boxes = infer_boxes(model, output_layer, image, w, h)
+        for i in range(len(label_indexes)):
+            if probs[i] > 0.9:
+                # label = "Face" if label_indexes[i] == 1 else "Not a Face"
+                cv2.rectangle(disp_image, (boxes[i][0], boxes[i][1]), (boxes[i][2], boxes[i][3]), (0, 255, 0), 2)
+                
+        show_image(disp_image)
 
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
@@ -121,17 +134,12 @@ def main():
                 disp_frame = frame.copy()
                 h, w, _ = disp_frame.shape
                 frame = preprocess(frame, W, H)
-                label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, frame, w, h)
-
-                cv2.putText(        
-                    img=disp_frame, 
-                    text=f"{labels[str(label_index)].title()} ({probs:.2f})", 
-                    org=(x1-10, y1-10), 
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale=1, 
-                    color=(0, 255, 0), 
-                    thickness=1
-                )
+                label_indexes, probs, boxes = infer_boxes(model, output_layer, frame, w, h)
+                for i in range(len(label_indexes)):
+                    if probs[i] > 0.9:
+                        # label = "Face" if label_indexes[i] == 1 else "Not a Face"
+                        cv2.rectangle(disp_frame, (boxes[i][0], boxes[i][1]), (boxes[i][2], boxes[i][3]), (0, 255, 0), 2)
+                
                 cv2.imshow("Feed", disp_frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -157,20 +165,13 @@ def main():
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT)
-
-            cv2.rectangle(disp_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(        
-                img=disp_frame, 
-                text=f"{labels[str(label_index)].title()} ({probs:.2f})", 
-                org=(x1-10, y1-10), 
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                fontScale=1, 
-                color=(0, 255, 0), 
-                thickness=1
-            )
+            label_indexes, probs, boxes = infer_boxes(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT)
+            for i in range(len(label_indexes)):
+                if probs[i] > 0.9:
+                    # label = "Face" if label_indexes[i] == 1 else "Not a Face"
+                    cv2.rectangle(disp_frame, (boxes[i][0], boxes[i][1]), (boxes[i][2], boxes[i][3]), (0, 255, 0), 2)
+            
             cv2.imshow("Feed", disp_frame)
-        
             if cv2.waitKey(1) & 0xFF == ord('q'): 
                 break
         

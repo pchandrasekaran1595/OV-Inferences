@@ -30,7 +30,7 @@ def breaker(num: int=50, char: str="*") -> None:
 
 
 def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
-    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA)
+    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
     return np.expand_dims(image, axis=0)
 
 
@@ -56,7 +56,7 @@ def setup(target: str) -> tuple:
     input_layer = next(iter(model.inputs))
     output_layer = next(iter(model.outputs))
 
-    labels = json.load(open(os.path.join(LABEL_PATH, "coco_labels_91.json"), "r"))
+    labels = json.load(open(os.path.join(LABEL_PATH, "coco_labels_80.json"), "r"))
 
     return model, labels, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
@@ -71,12 +71,14 @@ def infer_best_box(
 
     result = model(inputs=[image])[output_layer].squeeze()
     
-    label = int(result[0][1])
     probs = result[0][2]
-    x1 = int(result[0][3] * w)
-    y1 = int(result[0][4] * h)
-    x2 = int(result[0][5] * w)
-    y2 = int(result[0][6] * h)
+    best_index = np.argmax(probs)
+
+    label = int(result[best_index][1])
+    x1 = int(result[best_index][3] * w)
+    y1 = int(result[best_index][4] * h)
+    x2 = int(result[best_index][5] * w)
+    y2 = int(result[best_index][6] * h)
 
     return label, probs, (x1, y1), (x2, y2)
 
@@ -85,7 +87,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
-    parser.add_argument("--filename", "-f", type=str, default="Test_1.jpg", help="Image or Video Filename")
+    parser.add_argument("--filename", "-f", type=str, default="Test_2.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
     args = parser.parse_args()
@@ -93,7 +95,7 @@ def main():
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
+    model, labels, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)

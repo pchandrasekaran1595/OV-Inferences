@@ -30,8 +30,26 @@ def breaker(num: int=50, char: str="*") -> None:
 
 
 def preprocess(image: np.ndarray, width: int, height: int) -> np.ndarray:
-    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA)
+    image = cv2.resize(src=image, dsize=(width, height), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
     return np.expand_dims(image, axis=0)
+
+
+def segmenter_decode(class_index_image: np.ndarray) -> np.ndarray:
+    colors = np.array([(0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0), (0, 0, 128), (128, 0, 128),
+                       (0, 128, 128), (128, 128, 128), (64, 0, 0), (192, 0, 0), (64, 128, 0),
+                       (192, 128, 0), (64, 0, 128), (192, 0, 128), (64, 128, 128), (192, 128, 128),
+                       (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
+
+    r, g, b = np.zeros(class_index_image.shape, dtype=np.uint8), \
+              np.zeros(class_index_image.shape, dtype=np.uint8), \
+              np.zeros(class_index_image.shape, dtype=np.uint8)
+
+    for i in range(20):
+        indexes = (class_index_image == i)
+        r[indexes] = colors[i][0]
+        g[indexes] = colors[i][1]
+        b[indexes] = colors[i][2]
+    return np.stack([r, g, b], axis=2)
 
 
 def show_image(
@@ -56,30 +74,32 @@ def setup(target: str) -> tuple:
     input_layer = next(iter(model.inputs))
     output_layer = next(iter(model.outputs))
 
-    labels = json.load(open(os.path.join(LABEL_PATH, "coco_labels_91.json"), "r"))
+    labels = json.load(open(os.path.join(LABEL_PATH, "seg_labels_20.json"), "r"))
 
     return model, labels, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
 
 
-def infer_best_box(
+def infer(
     model, 
     output_layer, 
     image: np.ndarray, 
     w: int, 
-    h: int) -> tuple:
+    h: int,
+    labels: list
+) -> tuple:
 
     result = model(inputs=[image])[output_layer].squeeze()
+    label_indexes = np.unique(result)
+
+    label_list: list = []
+    for index in label_indexes: 
+        if index != 0:
+            label_list.append(labels[str(index)].title())
+    result = cv2.resize(src=segmenter_decode(result), dsize=(w, h), interpolation=cv2.INTER_CUBIC)
+
+    return result, label_list
     
-    label = int(result[0][1])
-    probs = result[0][2]
-    x1 = int(result[0][3] * w)
-    y1 = int(result[0][4] * h)
-    x2 = int(result[0][5] * w)
-    y2 = int(result[0][6] * h)
-
-    return label, probs, (x1, y1), (x2, y2)
-
 
 def main():
 
@@ -93,18 +113,16 @@ def main():
     assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, labels, input_layer, output_layer, (N, H, W, C) = setup(args.target)
+    model, labels, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         h, w, _ = image.shape
-        disp_image = image.copy()
         image = preprocess(image, W, H)
-
-        label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, image, w, h)
-        cv2.rectangle(disp_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        show_image(disp_image, title=f"{labels[str(label_index)].title()} ({probs:.2f})")
-
+        
+        result, label_list = infer(model, output_layer, image, w, h, labels)
+        
+        show_image(result, title=label_list)        
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
         cap = cv2.VideoCapture(os.path.join(INPUT_PATH, args.filename))
@@ -118,21 +136,10 @@ def main():
                         dsize=(int(frame.shape[1]/args.downscale), int(frame.shape[0]/args.downscale)), 
                         interpolation=cv2.INTER_AREA
                     )
-                disp_frame = frame.copy()
-                h, w, _ = disp_frame.shape
+                h, w, _ = frame.shape
                 frame = preprocess(frame, W, H)
-                label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, frame, w, h)
-
-                cv2.putText(        
-                    img=disp_frame, 
-                    text=f"{labels[str(label_index)].title()} ({probs:.2f})", 
-                    org=(x1-10, y1-10), 
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale=1, 
-                    color=(0, 255, 0), 
-                    thickness=1
-                )
-                cv2.imshow("Feed", disp_frame)
+                frame, _ = infer(model, output_layer, frame, w, h, labels)
+                cv2.imshow("Feed", frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
@@ -153,24 +160,13 @@ def main():
 
         while True:
             ret, frame = cap.read()
-            disp_frame = frame.copy()
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            label_index, probs, (x1, y1), (x2, y2) = infer_best_box(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT)
+            frame, _ = infer(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, labels)
+            
+            cv2.imshow("Feed", frame)
 
-            cv2.rectangle(disp_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(        
-                img=disp_frame, 
-                text=f"{labels[str(label_index)].title()} ({probs:.2f})", 
-                org=(x1-10, y1-10), 
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                fontScale=1, 
-                color=(0, 255, 0), 
-                thickness=1
-            )
-            cv2.imshow("Feed", disp_frame)
-        
             if cv2.waitKey(1) & 0xFF == ord('q'): 
                 break
         
