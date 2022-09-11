@@ -131,7 +131,7 @@ def main():
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()
@@ -156,7 +156,7 @@ def main():
             for box in boxes: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)         
 
             cv2.imshow("Feed", disp_frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()
