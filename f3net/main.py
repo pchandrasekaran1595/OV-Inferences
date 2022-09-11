@@ -105,7 +105,7 @@ def main():
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()
@@ -128,7 +128,7 @@ def main():
             frame = sigmoid(cv2.resize(src=model(inputs=[frame])[output_layer].squeeze(), dsize=(CAM_WIDTH, CAM_HEIGHT), interpolation=cv2.INTER_AREA))
 
             cv2.imshow("Feed", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()

@@ -6,6 +6,8 @@ __pycache__
 !Test_1.jpg
 !Test_2.jpg
 !Test_3.jfif
+!Test_4.jfif
+!Test_5.jpg
 *.mp4
 *.avi
 .env

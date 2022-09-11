@@ -143,7 +143,7 @@ def main():
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()
@@ -167,7 +167,7 @@ def main():
             
             cv2.imshow("Feed", frame)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'): 
+            if cv2.waitKey(1) & 0xFF == ord("q"): 
                 break
         
         cap.release()
