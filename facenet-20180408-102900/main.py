@@ -74,6 +74,8 @@ def main():
     model, input_layer, output_layer, (N, H, W, C) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
+        assert args.filename in os.listdir(INPUT_PATH), "File not Found"
+
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         image = preprocess(image, W, H)
 
