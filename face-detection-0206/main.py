@@ -100,6 +100,8 @@ def main():
     model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
+        assert args.filename in os.listdir(INPUT_PATH), "File not Found"
+
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         h, w, _ = image.shape
         disp_image = image.copy()
@@ -110,6 +112,8 @@ def main():
         show_image(disp_image)
 
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
+        assert args.filename in os.listdir(INPUT_PATH), "File not Found"
+
         cap = cv2.VideoCapture(os.path.join(INPUT_PATH, args.filename))
 
         while True:

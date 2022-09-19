@@ -68,12 +68,13 @@ def main():
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
     args = parser.parse_args()
 
-    assert args.filename in os.listdir(INPUT_PATH), "File not Found"
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
     model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
+        assert args.filename in os.listdir(INPUT_PATH), "File not Found"
+
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         image = preprocess(image, W, H)
 
