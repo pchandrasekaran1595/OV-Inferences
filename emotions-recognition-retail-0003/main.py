@@ -54,8 +54,9 @@ def setup(target: str) -> tuple:
     model = ie.compile_model(model=model, device_name=target)
 
     input_layer = next(iter(model.inputs))
+    output_layer = next(iter(model.outputs))
 
-    return model, {0 : "Female", 1 : "Male"}, input_layer, model.outputs, \
+    return model, {0 : "Neutral", 1 : "Happy", 2 : "Sad", 3 : "Surprise", 4 : "Anger"}, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
     
 
@@ -63,7 +64,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
-    parser.add_argument("--filename", "-f", type=str, default="Test_10.jpg", help="Image or Video Filename")
+    parser.add_argument("--filename", "-f", type=str, default="Test_11.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
     args = parser.parse_args()
@@ -78,11 +79,10 @@ def main():
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
         image = preprocess(image, W, H)
 
-        label = labels[np.argmax(model(inputs=[image])[output_layer[0]])]
-        age = model(inputs=[image])[output_layer[1]].squeeze() * 100
+        label = labels[np.argmax(model(inputs=[image])[output_layer])]
 
         breaker()
-        print(f"{label} aged {age:.2f}")
+        print(f"{label}")
         breaker()
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
@@ -101,12 +101,11 @@ def main():
                     )
                 disp_frame = frame.copy()
                 frame = preprocess(frame, W, H)
-                label = labels[np.argmax(model(inputs=[image])[output_layer[0]])]
-                age = model(inputs=[image])[output_layer[1]].squeeze() * 100
+                label = labels[np.argmax(model(inputs=[image])[output_layer])]
 
                 cv2.putText(
                     img=disp_frame, 
-                    text=f"{label}, {age:.2f}", 
+                    text=f"{label}", 
                     org=(25, 75), 
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                     fontScale=1, 
@@ -138,12 +137,11 @@ def main():
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            label = labels[np.argmax(model(inputs=[frame])[output_layer[0]])]
-            age = model(inputs=[frame])[output_layer[1]].squeeze() * 100
+            label = labels[np.argmax(model(inputs=[image])[output_layer])]
 
             cv2.putText(
                 img=disp_frame, 
-                text=f"{label}, {age:.2f}", 
+                text=f"{label}", 
                 org=(25, 75), 
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
                 fontScale=1, 

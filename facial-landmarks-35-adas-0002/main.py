@@ -54,8 +54,9 @@ def setup(target: str) -> tuple:
     model = ie.compile_model(model=model, device_name=target)
 
     input_layer = next(iter(model.inputs))
+    output_layer = next(iter(model.outputs))
 
-    return model, {0 : "Female", 1 : "Male"}, input_layer, model.outputs, \
+    return model, input_layer, output_layer, \
            (input_layer.shape[0], input_layer.shape[1], input_layer.shape[2], input_layer.shape[3])
     
 
@@ -70,20 +71,19 @@ def main():
 
     assert args.target in ["CPU", "GPU"], "Invalid Target Device"
 
-    model, labels, input_layer, output_layer, (N, C, H, W) = setup(args.target)
+    model, input_layer, output_layer, (N, C, H, W) = setup(args.target)
 
     if re.match(r"^image$", args.mode, re.IGNORECASE):
         assert args.filename in os.listdir(INPUT_PATH), "File not Found"
 
         image = cv2.imread(os.path.join(INPUT_PATH, args.filename), cv2.IMREAD_COLOR)
+        disp_image = image.copy()
+        h, w, _ = disp_image.shape
         image = preprocess(image, W, H)
 
-        label = labels[np.argmax(model(inputs=[image])[output_layer[0]])]
-        age = model(inputs=[image])[output_layer[1]].squeeze() * 100
-
-        breaker()
-        print(f"{label} aged {age:.2f}")
-        breaker()
+        result = model(inputs=[image])[output_layer].squeeze()
+        for i in range(0, result.shape[0], 2): cv2.circle(disp_image, center=(int(result[i] * w), int(result[i+1] * h)), radius=int(w/200), color=(0, 255, 0), thickness=-1)
+        show_image(disp_image)
     
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
         assert args.filename in os.listdir(INPUT_PATH), "File not Found"
@@ -100,19 +100,18 @@ def main():
                         interpolation=cv2.INTER_AREA
                     )
                 disp_frame = frame.copy()
+                h, w, _ = disp_frame.shape
                 frame = preprocess(frame, W, H)
-                label = labels[np.argmax(model(inputs=[image])[output_layer[0]])]
-                age = model(inputs=[image])[output_layer[1]].squeeze() * 100
+                result = model(inputs=[frame])[output_layer].squeeze()
+                for i in range(0, result.shape[0], 2): 
+                    cv2.circle(
+                        disp_frame, 
+                        center=(int(result[i] * w), int(result[i+1] * h)), 
+                        radius=int(w/200), 
+                        color=(0, 255, 0), 
+                        thickness=-1
+                    )
 
-                cv2.putText(
-                    img=disp_frame, 
-                    text=f"{label}, {age:.2f}", 
-                    org=(25, 75), 
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale=1, 
-                    color=(0, 255, 0), 
-                    thickness=2
-                )
                 cv2.imshow("Feed", disp_frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -135,21 +134,20 @@ def main():
         while True:
             ret, frame = cap.read()
             disp_frame = frame.copy()
+            h, w, _ = disp_frame.shape
+
             if not ret: break
             
             frame = preprocess(frame, W, H)
-            label = labels[np.argmax(model(inputs=[frame])[output_layer[0]])]
-            age = model(inputs=[frame])[output_layer[1]].squeeze() * 100
-
-            cv2.putText(
-                img=disp_frame, 
-                text=f"{label}, {age:.2f}", 
-                org=(25, 75), 
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
-                fontScale=1, 
-                color=(0, 255, 0), 
-                thickness=2
-            )
+            result = model(inputs=[frame])[output_layer].squeeze()
+            for i in range(0, result.shape[0], 2): 
+                cv2.circle(
+                    disp_frame, 
+                    center=(int(result[i] * w), int(result[i+1] * h)), 
+                    radius=int(w/200), 
+                    color=(0, 255, 0), 
+                    thickness=-1
+                )
             cv2.imshow("Feed", disp_frame)
         
             if cv2.waitKey(1) & 0xFF == ord("q"): 
