@@ -90,7 +90,7 @@ def infer_boxes(
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", "-m", type=str, default="realtime", help="Mode: image or video or realtime")
+    parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
     parser.add_argument("--filename", "-f", type=str, default="Test_5.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
