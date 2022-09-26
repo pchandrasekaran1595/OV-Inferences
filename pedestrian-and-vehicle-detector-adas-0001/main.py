@@ -69,23 +69,28 @@ def infer_boxes(
     threshold: float=0.6) -> list:
     
     boxes: list = []
+    labels: list = []
+    probs: list = []
 
     result = model(inputs=[image])[output_layer].squeeze()
+
     for i in range(result.shape[0]):
         if result[i, 2] > threshold:
+            labels.append(result[i, 1])
+            probs.append(result[i, 2])
             boxes.append([int(result[i, 3] * w), \
                           int(result[i, 4] * h), \
                           int(result[i, 5] * w), \
                           int(result[i, 6] * h)])
         else: pass
         
-    return boxes
+    return labels, probs, boxes
 
 
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", "-m", type=str, default="image", help="Mode: image or video or realtime")
+    parser.add_argument("--mode", "-m", type=str, default="realtime", help="Mode: image or video or realtime")
     parser.add_argument("--filename", "-f", type=str, default="Test_5.jpg", help="Image or Video Filename")
     parser.add_argument("--downscale", "-ds", type=float, default=None, help="Downscale factor (Useful for Videos)")
     parser.add_argument("--target", "-t", type=str, default="CPU", help="Target Device for Inference")
@@ -105,8 +110,14 @@ def main():
         disp_image = image.copy()
         image = preprocess(image, W, H)
 
-        boxes = infer_boxes(model, output_layer, image, w, h, args.threshold)
-        for box in boxes: cv2.rectangle(disp_image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)         
+        labels, probs, boxes = infer_boxes(model, output_layer, image, w, h, args.threshold)
+
+        i: int = 0
+        for box in boxes: 
+            if int(labels[i]) == 1: cv2.rectangle(disp_image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)  
+            else: cv2.rectangle(disp_image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)  
+            i += 1
+
         show_image(disp_image)
 
     elif re.match(r"^video$", args.mode, re.IGNORECASE):
@@ -127,7 +138,13 @@ def main():
                 h, w, _ = disp_frame.shape
                 frame = preprocess(frame, W, H)
                 boxes = infer_boxes(model, output_layer, frame, w, h, args.threshold)
-                for box in boxes: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)         
+                labels, probs, boxes = infer_boxes(model, output_layer, frame, w, h, args.threshold)
+
+                i: int = 0
+                for box in boxes: 
+                    if int(labels[i]) == 1: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)  
+                    else: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)  
+                    i += 1
 
                 cv2.imshow("Feed", disp_frame)
             else:
@@ -153,9 +170,16 @@ def main():
             disp_frame = frame.copy()
             if not ret: break
             
+            h, w, _ = disp_frame.shape
             frame = preprocess(frame, W, H)
             boxes = infer_boxes(model, output_layer, frame, CAM_WIDTH, CAM_HEIGHT, args.threshold)
-            for box in boxes: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)         
+            labels, probs, boxes = infer_boxes(model, output_layer, frame, w, h, args.threshold)
+
+            i: int = 0
+            for box in boxes: 
+                if int(labels[i]) == 1: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)  
+                else: cv2.rectangle(disp_frame, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)  
+                i += 1         
 
             cv2.imshow("Feed", disp_frame)
             if cv2.waitKey(1) & 0xFF == ord("q"): 
